@@ -46,10 +46,13 @@ async function main() {
     console.log("Smoke tests passed");
     process.exit(0);
   } catch (err) {
-    console.error(
-      "Smoke test failed:",
-      err && err.response && err.response.data ? err.response.data : err.message
-    );
+    console.error("Smoke test failed:");
+    if (err && err.response) {
+      console.error("Response status:", err.response.status);
+      console.error("Response data:", err.response.data);
+    }
+    console.error("Error message:", err && err.message);
+    if (err && err.stack) console.error(err.stack);
     process.exit(2);
   }
 }

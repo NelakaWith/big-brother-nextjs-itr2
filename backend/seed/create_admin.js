@@ -1,6 +1,6 @@
 require("dotenv").config();
 const db = require("../src/db");
-const bcrypt = require("bcrypt");
+const bcrypt = require("bcryptjs");
 
 async function run() {
   const pwd = process.env.ADMIN_PASSWORD || "adminpass";
