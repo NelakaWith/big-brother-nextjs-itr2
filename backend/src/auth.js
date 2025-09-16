@@ -12,6 +12,10 @@ function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET);
 }
 
+function decodeTokenIgnoreExpiration(token) {
+  return jwt.verify(token, JWT_SECRET, { ignoreExpiration: true });
+}
+
 function getTokenFromReq(req) {
   // Authorization header
   const auth = req.headers && req.headers.authorization;

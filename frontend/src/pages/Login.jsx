@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { useRouter } from "next/router";
+import { useNavigate } from "react-router-dom";
 
 export default function Login() {
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("adminpass");
   const [err, setErr] = useState(null);
-  const router = useRouter();
+  const nav = useNavigate();
 
   async function submit(e) {
     e.preventDefault();
@@ -19,25 +19,27 @@ export default function Login() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Login failed");
       localStorage.setItem("bb_token", data.token);
-      router.push("/dashboard");
+      nav("/dashboard");
     } catch (e) {
       setErr(e.message);
     }
   }
 
   return (
-    <div className="container">
-      <div className="max-w-md mx-auto bg-white p-6 rounded shadow mt-20">
-        <h1 className="text-2xl font-semibold mb-4">Sign in</h1>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="w-full max-w-md bg-white p-6 rounded shadow">
+        <h1 className="text-xl font-semibold mb-4">Sign in</h1>
         <form onSubmit={submit}>
-          <label className="block mb-2">Username</label>
           <input
+            name="username"
+            placeholder="username"
             className="w-full p-2 border rounded mb-3"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
-          <label className="block mb-2">Password</label>
           <input
+            name="password"
+            placeholder="password"
             type="password"
             className="w-full p-2 border rounded mb-3"
             value={password}
