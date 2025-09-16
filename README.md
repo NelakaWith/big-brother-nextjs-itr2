@@ -1,48 +1,85 @@
 # Big Brother — Local development
 
-This repo contains a small self-hosted monitoring dashboard (backend + frontend). The following notes explain how to run the project locally and configure environment variables.
+This repository contains a small self-hosted monitoring dashboard: an Express backend and a Vite + React frontend.
 
-Quick start (PowerShell)
+## Quick start (PowerShell)
 
-1. Start the backend on port 3002 (matches frontend proxy fallback):
+1. Start the backend (defaults to port 3002):
 
 ```powershell
-$env:PORT=3002
 cd backend
 npm install
+$env:PORT=3002
 npm run dev
 ```
 
-2. Start the frontend and point it to the backend:
+2. Start the frontend (Vite) and point it to the backend:
 
 ```powershell
-$env:BACKEND_URL='http://localhost:3002'
 cd frontend
 npm install
+# optional: set the backend target used by the dev proxy
+$env:VITE_BACKEND_URL='http://localhost:3002'
 npm run dev
 ```
 
-Runners included
+## Files and helpers
 
-- `run-local.ps1` — PowerShell runner that starts backend and frontend in separate processes (uses npm dev scripts).
-- `run-dev.bat` — Minimal batch file that starts backend and frontend (starts http://localhost:5173 by default; change if your frontend runs on 8083).
-- `run-separate.bat` / `run-local.bat` — other helpers to start the app and capture logs.
+- `run-local.ps1`, `run-dev.bat` — convenience scripts that start backend and frontend for local development.
+- `frontend/.env.local.example` — example env for the frontend (VITE_BACKEND_URL).
+- `backend/.env.local.example` — example env for the backend (DB, JWT_SECRET, etc.).
 
-Environment examples
+## Seeding an admin user
 
-- `backend/.env.local.example` — copy to `backend/.env.local` or set variables in your environment.
-- `frontend/.env.local.example` — copy to `frontend/.env.local` or set variables in your environment.
-
-Seeding admin user
-
-From the `backend` folder, run:
+From the `backend` folder run:
 
 ```powershell
 node seed/create_admin.js
 ```
 
-Notes
+## Auth and token refresh
 
-- Do not commit real secrets. Use `.env.local` or your OS/service secret manager.
-- The frontend proxy in `frontend/pages/api/[...proxy].js` forwards `/api` to the backend target set by `BACKEND_URL` or `http://localhost:3002` by default.
-- If you change backend port, set `BACKEND_URL` before starting the frontend.
+- The backend issues JWTs on `/api/auth/login`.
+- The frontend stores the JWT in `localStorage` under `bb_token`.
+- The frontend will attempt to refresh an expired token by calling `/api/auth/refresh` (this endpoint accepts the existing token and returns a new one). If refresh fails the user is redirected to `/login`.
+- EventSource (SSE) connections attach the token as `?token=...` in the URL since SSE doesn't support custom headers.
+
+## Running tests
+
+Unit tests (Vitest + Testing Library):
+
+```powershell
+cd frontend
+npm install
+npm run test:unit
+```
+
+E2E tests (Playwright):
+
+1. Install Playwright browsers (one-time):
+
+   ```powershell
+   npx playwright install
+   ```
+
+2. Ensure backend and frontend dev servers are running, then:
+
+   ```powershell
+   cd frontend
+   npm run test:e2e
+   ```
+
+## Troubleshooting
+
+- ERESOLVE dependency errors: if you see npm ERESOLVE peer dependency errors, try using the package versions in `frontend/package.json` (this repo pins `vite` to a v4.x line that is compatible with `@vitejs/plugin-react@4.x`). If you get similar errors, run `npm install --legacy-peer-deps` or use the pinned versions.
+- Playwright: if Playwright e2e tests fail due to missing browsers, run `npx playwright install`.
+- Backend DB: ensure MySQL is running and credentials in `backend/.env` are correct before running migrations or seeds.
+
+## Security
+
+- This project uses simple JWTs for local development. Do not use these credentials/secrets in production. Use secure secret management in real deployments.
+
+## Next steps I can help with
+
+- Start both servers here and run the unit + e2e tests and report results.
+- Add a GitHub Actions workflow to run unit and e2e tests on push/PR.
