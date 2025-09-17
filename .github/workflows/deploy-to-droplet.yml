@@ -1,30 +1,54 @@
-name: Deploy to Droplet (tags)
+name: Deploy to Droplet (manual)
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional tag to deploy (e.g. v1.2.3). If blank the workflow will deploy the latest GitHub Release."
+        required: false
+        default: ""
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate tag format
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Resolve tag to deploy
+        id: resolve_tag
         run: |
-          TAG=${{ github.ref_name }}
-          echo "Tag detected: $TAG"
-          # Accept vMAJOR.MINOR.PATCH and optional pre-release like v1.2.3-rc.1
+          INPUT_TAG="${{ github.event.inputs.tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+            echo "Using provided tag: $TAG"
+          else
+            echo "No tag provided, resolving latest GitHub Release..."
+            TAG=$(curl -sS -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name)
+            if [ "$TAG" = "null" ] || [ -z "$TAG" ]; then
+              echo "Failed to resolve latest release tag"
+              exit 1
+            fi
+            echo "Latest release tag: $TAG"
+          fi
+
+          # Validate tag format
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid tag format: $TAG"
             echo "Use vMAJOR.MINOR.PATCH (e.g. v1.2.3) or pre-release like v1.2.3-rc.1"
             exit 1
           fi
 
+          git fetch --tags
+          SHA=$(git rev-list -n 1 "refs/tags/$TAG") || SHA=""
+          echo "Resolved tag $TAG -> $SHA"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+
       - name: Checkout code (with tags)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -63,7 +87,7 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           source: .
-          target: ~/big-brother/releases/${{ github.ref_name }}
+          target: ~/big-brother/releases/${{ steps.resolve_tag.outputs.tag }}
           rm: true
 
       - name: Run deploy script on droplet (symlink current -> release)
@@ -74,8 +98,8 @@ jobs:
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
             set -e
-            TAG=${{ github.ref_name }}
-            SHA=${{ github.sha }}
+            TAG=${{ steps.resolve_tag.outputs.tag }}
+            SHA=${{ steps.resolve_tag.outputs.sha }}
             RELEASE_DIR="$HOME/big-brother/releases/$TAG"
             CURRENT_DIR="$HOME/big-brother/current"
 
