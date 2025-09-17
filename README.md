@@ -116,23 +116,52 @@ Notes and operational tips
 
 ### Architecture diagram
 
-If your renderer supports Mermaid, this diagram shows the high-level flow:
+If your renderer supports Mermaid, this diagram shows the high-level flow (PM2 ingestion, DB persistence, event emission, and client streaming). This layout follows GitHub's Mermaid support and should render in README previews.
 
 ```mermaid
 flowchart LR
-   A[App (PM2 process)] -->|stdout/stderr| PM2[PM2 bus]
+   %% Processes and Bus
+   subgraph Processes
+      A[App / PM2 process]
+   end
+
+   A -->|stdout / stderr| PM2[PM2 bus]
+
+   %% Ingestion
    PM2 -->|log packets| LStreamer[pm2LogStreamer]
-   LStreamer -->|insert| DB[(MySQL logs table)]
-   LStreamer -->|emit event| Backend[Express]
-   Backend -->|SSE| Frontend[React (EventSource)]
-   Backend -->|WebSocket| FrontendWS[React (WebSocket)]
+   LStreamer -->|INSERT| DB[(MySQL logs table)]
+   LStreamer -->|EMIT event| Evt[EventEmitter]
+
+   %% Backend & streaming
+   Evt --> Backend[Express API]
+   Backend -->|Server-Sent Events| FrontendSSE[React (EventSource)]
+   Backend -->|WebSocket (WS)| FrontendWS[React (WebSocket)]
+   Backend -->|REST API| FrontendAPI[React (REST / auth)]
+
+   %% Dev / helpers
+   subgraph DevHelpers
+      Emit[emit_log.js \n(test emitter)]
+      Vite[Vite dev server (proxy /api -> backend)]
+   end
+
+   Emit -->|emit event to| Evt
+   Vite -->|proxy /api| Backend
+   FrontendSSE -->|uses| FrontendAPI
+
+   %% Notes / styling
+   DB -. Persists logs .-> Backend
+   classDef infra fill:#f3f4f6,stroke:#111,stroke-width:1px;
+   class DB,PM2,LStreamer infra
+
 ```
 
 ASCII fallback:
 
-App (pm2) --logs--> PM2 bus --packets--> pm2LogStreamer --> DB (logs)
+App (PM2) --logs--> PM2 bus --packets--> pm2LogStreamer --> DB (logs)
 |
-+--> Backend (SSE / WS) --> Frontend
++--> EventEmitter --> Backend --> SSE / WS --> Frontend
+|
++--> (emit_log.js) test emitter (dev)
 
 ### How to test streaming locally
 
