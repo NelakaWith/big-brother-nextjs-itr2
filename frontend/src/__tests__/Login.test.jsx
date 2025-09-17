@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import Login from "../pages/Login";
 import { BrowserRouter } from "react-router-dom";
 
@@ -8,7 +8,8 @@ test("renders login form", () => {
       <Login />
     </BrowserRouter>
   );
-  expect(screen.getByText(/Sign in/i)).toBeInTheDocument();
+  // heading and button both contain 'Sign in'; assert heading text specifically
+  expect(screen.getByRole("heading", { name: /Sign in/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Sign in/i })).toBeInTheDocument();
 });
 
@@ -33,8 +34,9 @@ test("submits login and stores token", async () => {
     target: { value: "adminpass" },
   });
   fireEvent.click(screen.getByRole("button", { name: /Sign in/i }));
-  // wait a tick
-  await new Promise((r) => setTimeout(r, 0));
-  expect(localStorage.getItem("bb_token")).toBe(fakeToken);
+  // wait for async state updates and effects to complete
+  await waitFor(() => {
+    expect(localStorage.getItem("bb_token")).toBe(fakeToken);
+  });
   global.fetch.mockRestore && global.fetch.mockRestore();
 });
