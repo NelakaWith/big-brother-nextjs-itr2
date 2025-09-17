@@ -78,4 +78,36 @@ function onLog(cb) {
   return () => emitter.off("log", cb);
 }
 
-module.exports = { onLog };
+// emit a test log event programmatically (useful for dev/CI)
+async function emitTestLog(appId, text) {
+  const created_at = new Date();
+  const log_type = "test";
+  let insertRow = null;
+  try {
+    if (appId) {
+      const [result] = await db.query(
+        "INSERT INTO logs (app_id, log_type, log_text) VALUES (?, ?, ?)",
+        [appId, log_type, text]
+      );
+      insertRow = {
+        id: result.insertId,
+        app_id: appId,
+        log_type,
+        log_text: text,
+        created_at,
+      };
+    }
+  } catch (e) {
+    // ignore DB errors for test emitter
+  }
+  emitter.emit("log", {
+    pm2_name: null,
+    app_id: appId || null,
+    log_type,
+    log_text: text,
+    created_at,
+    raw: null,
+  });
+}
+
+module.exports = { onLog, emitTestLog };
