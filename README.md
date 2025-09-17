@@ -120,7 +120,7 @@ If your renderer supports Mermaid, this diagram shows the high-level flow (PM2 i
 
 ````mermaid
 ```mermaid
-flowchart LR
+graph LR
    A[App PM2] --> PM2[PM2 bus]
    PM2 --> LStreamer[pm2LogStreamer]
    LStreamer --> DB[(MySQL logs)]
