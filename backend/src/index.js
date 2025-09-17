@@ -16,9 +16,23 @@ app.use((req, res, next) => {
     const now = new Date().toISOString();
     const remote =
       req.ip || (req.connection && req.connection.remoteAddress) || "-";
-    console.log(
-      `[req] ${now} ${req.method} ${req.originalUrl} remote=${remote}`
-    );
+    // redact token query parameter when present to avoid logging JWTs
+    let loggedUrl = req.originalUrl || req.url;
+    try {
+      const urlObj = new URL(
+        loggedUrl,
+        `http://${req.headers.host || "localhost"}`
+      );
+      if (urlObj.searchParams.has("token")) {
+        urlObj.searchParams.set("token", "<REDACTED>");
+        // build path + search (without origin)
+        loggedUrl = urlObj.pathname + urlObj.search;
+      }
+    } catch (e) {
+      // if URL parsing fails, fall back to original
+    }
+
+    console.log(`[req] ${now} ${req.method} ${loggedUrl} remote=${remote}`);
   } catch (e) {
     // logging should not break request handling
   }
