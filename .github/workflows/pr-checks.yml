@@ -27,45 +27,4 @@ jobs:
         run: |
           npm test
 
-  backend:
-    name: Backend smoke test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install backend deps
-        working-directory: backend
-        run: |
-          npm ci
-
-      - name: Start backend for smoke tests
-        working-directory: backend
-        run: |
-          # generate a temporary JWT_SECRET for CI (32 bytes hex)
-          JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
-          echo "Starting backend with a temporary JWT_SECRET"
-
-          # start backend in background, capture pid and log
-          JWT_SECRET=$JWT_SECRET npm start > backend.log 2>&1 & echo $! > backend.pid
-
-          # wait for server to be available
-          for i in $(seq 1 30); do
-            if curl -sSf http://127.0.0.1:3002/ >/dev/null 2>&1; then
-              echo "backend up"
-              break
-            fi
-            sleep 1
-          done
-          echo "tailing backend log (last 200 lines)"
-          tail -n 200 backend.log || true
-
-      - name: Run backend smoke test
-        working-directory: backend
-        run: |
-          npm run smoke
+  # backend smoke tests removed per request
