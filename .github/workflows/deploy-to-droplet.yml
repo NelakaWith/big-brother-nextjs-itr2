@@ -64,7 +64,6 @@ jobs:
       - name: Run frontend unit tests
         working-directory: frontend
         run: |
-          npm ci
           npm test
 
       #- name: Run frontend e2e tests

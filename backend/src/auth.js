@@ -1,7 +1,12 @@
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
-const JWT_SECRET = process.env.JWT_SECRET || "change-this-secret";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error(
+    "JWT_SECRET environment variable must be set. Refusing to start without a secret."
+  );
+}
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1d";
 
 function signToken(payload) {
