@@ -150,8 +150,11 @@ You have two main ways to test live streaming: using PM2 to produce real log eve
 1. Test with PM2 (real logs)
 
 ```bash
-# start a tiny process that prints a timestamp every second
-pm2 start --name smoke-app --interpreter bash -- "-lc" "while true; do echo \"hello $(date)\"; sleep 1; done"
+# start a tiny process that prints a timestamp every second (recommended: use the script)
+pm2 start backend/scripts/smoke-app.sh --name smoke-app --interpreter bash
+
+# if you prefer a one-liner in PowerShell, wrap the -lc payload in single quotes:
+pm2 start --name smoke-app --interpreter bash -- -lc 'while true; do echo "hello $(date)"; sleep 1; done'
 ```
 
 ```bash
