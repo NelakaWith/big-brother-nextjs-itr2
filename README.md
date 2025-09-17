@@ -120,38 +120,19 @@ If your renderer supports Mermaid, this diagram shows the high-level flow (PM2 i
 
 ```mermaid
 flowchart LR
-   %% Processes and Bus
-   subgraph Processes
-      A[App / PM2 process]
-   end
+  A[App / PM2 process] -->|stdout / stderr| PM2[PM2 bus]
+  PM2 -->|log packets| LStreamer[pm2LogStreamer]
+  LStreamer -->|INSERT| DB[(MySQL logs table)]
+  LStreamer -->|EMIT| Evt[EventEmitter]
 
-   A -->|stdout / stderr| PM2[PM2 bus]
+  Evt --> Backend[Express API]
+  Backend -->|SSE| FrontendSSE[React - EventSource]
+  Backend -->|WebSocket| FrontendWS[React - WebSocket]
+  Backend -->|REST| FrontendAPI[React - REST]
 
-   %% Ingestion
-   PM2 -->|log packets| LStreamer[pm2LogStreamer]
-   LStreamer -->|INSERT| DB[(MySQL logs table)]
-   LStreamer -->|EMIT event| Evt[EventEmitter]
-
-   %% Backend & streaming
-   Evt --> Backend[Express API]
-   Backend -->|Server-Sent Events| FrontendSSE[React (EventSource)]
-   Backend -->|WebSocket (WS)| FrontendWS[React (WebSocket)]
-   Backend -->|REST API| FrontendAPI[React (REST / auth)]
-
-   %% Dev / helpers
-   subgraph DevHelpers
-      Emit[emit_log.js \n(test emitter)]
-      Vite[Vite dev server (proxy /api -> backend)]
-   end
-
-   Emit -->|emit event to| Evt
-   Vite -->|proxy /api| Backend
-   FrontendSSE -->|uses| FrontendAPI
-
-   %% Notes / styling
-   DB -. Persists logs .-> Backend
-   classDef infra fill:#f3f4f6,stroke:#111,stroke-width:1px;
-   class DB,PM2,LStreamer infra
+  Emit[emit_log.js (test emitter)] -->|emit| Evt
+  Vite[Vite dev server (proxy /api -> backend)] -->|proxy| Backend
+  FrontendSSE -->|calls REST| FrontendAPI
 
 ```
 
