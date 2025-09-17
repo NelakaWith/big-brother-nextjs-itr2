@@ -118,7 +118,6 @@ Notes and operational tips
 
 If your renderer supports Mermaid, this diagram shows the high-level flow (PM2 ingestion, DB persistence, event emission, and client streaming). This layout follows GitHub's Mermaid support and should render in README previews.
 
-````mermaid
 ```mermaid
 graph LR
    A[App PM2] --> PM2[PM2 bus]
@@ -134,10 +133,7 @@ graph LR
    Emit[emit_log.js] --> Evt
    Vite[Vite dev server] --> Backend
    FrontendSSE --> FrontendAPI
-
-````
-
-````
+```
 
 ASCII fallback:
 
@@ -156,7 +152,7 @@ You have two main ways to test live streaming: using PM2 to produce real log eve
 ```bash
 # start a tiny process that prints a timestamp every second
 pm2 start --name smoke-app --interpreter bash -- "-lc" "while true; do echo \"hello $(date)\"; sleep 1; done"
-````
+```
 
 ```bash
 # using wscat (npm i -g wscat)
