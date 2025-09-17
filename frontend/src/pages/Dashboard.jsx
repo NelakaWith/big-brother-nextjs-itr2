@@ -50,7 +50,13 @@ export default function Dashboard() {
   useEffect(() => {
     authFetch("/api/apps")
       .then((r) => r.json())
-      .then((d) => setApps(d))
+      .then((d) => {
+        // backend returns { ok: true, data: [...] }
+        if (!d) return setApps([]);
+        if (Array.isArray(d)) return setApps(d);
+        if (d.data && Array.isArray(d.data)) return setApps(d.data);
+        return setApps([]);
+      })
       .catch(() => {});
   }, []);
 
@@ -118,15 +124,18 @@ export default function Dashboard() {
             className="h-96 overflow-auto bg-black text-white p-3 rounded"
           >
             {logs
-              .filter(
-                (l) =>
-                  !filter ||
-                  (l.message &&
-                    l.message.toLowerCase().includes(filter.toLowerCase()))
-              )
+              .filter((l) => {
+                const text = l.log_text || l.message || "";
+                return (
+                  !filter || text.toLowerCase().includes(filter.toLowerCase())
+                );
+              })
               .map((l, i) => (
                 <div key={i} className="text-xs">
-                  {new Date(l.time).toLocaleTimeString()} {l.message}
+                  {new Date(
+                    l.created_at || l.time || Date.now()
+                  ).toLocaleTimeString()}{" "}
+                  {l.log_text || l.message}
                 </div>
               ))}
           </div>

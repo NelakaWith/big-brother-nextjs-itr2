@@ -5,16 +5,37 @@ const { onLog } = require("../pm2LogStreamer");
 async function listApps(req, res) {
   try {
     const [rows] = await db.query("SELECT * FROM apps ORDER BY id DESC");
-    // enrich with pm2 status
-    const enriched = await Promise.all(
-      rows.map(async (app) => {
-        let pm2info = null;
-        if (app.pm2_name) {
-          pm2info = await findProcessByName(app.pm2_name);
+    // enrich with pm2 status - fetch process list once to avoid repeated connects
+    let procs = [];
+    try {
+      procs = await require("../pm2Helper").listProcesses();
+    } catch (e) {
+      // If pm2 isn't available, continue without it
+      procs = [];
+    }
+    const enriched = rows.map((app) => {
+      let pm2info = null;
+      try {
+        if (app.pm2_name && procs && procs.length) {
+          const p = procs.find(
+            (x) =>
+              x.name === app.pm2_name ||
+              (x.pm2_env &&
+                x.pm2_env.pm_exec_path &&
+                x.pm2_env.pm_exec_path.includes(app.pm2_name))
+          );
+          if (p)
+            pm2info = {
+              pid: p.pid,
+              name: p.name,
+              pm_id: p.pm_id,
+              monit: p.monit || {},
+              pm2_env: p.pm2_env || {},
+            };
         }
-        return Object.assign({}, app, { pm2: pm2info });
-      })
-    );
+      } catch (e) {}
+      return Object.assign({}, app, { pm2: pm2info });
+    });
     res.json({ ok: true, data: enriched });
   } catch (err) {
     console.error("listApps error", err);

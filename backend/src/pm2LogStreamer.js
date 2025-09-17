@@ -9,16 +9,10 @@ let connected = false;
 function safeConnect() {
   if (connected) return;
   pm2.connect((err) => {
-    if (err) {
-      console.warn("pm2 connect failed:", err && err.message);
-      return;
-    }
+    if (err) return;
     connected = true;
     pm2.launchBus((err2, bus) => {
-      if (err2) {
-        console.warn("pm2 launchBus failed:", err2 && err2.message);
-        return;
-      }
+      if (err2) return;
       bus.on("log:out", async (packet) => handlePacket("out", packet));
       bus.on("log:err", async (packet) => handlePacket("err", packet));
     });

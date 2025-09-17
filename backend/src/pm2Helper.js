@@ -2,10 +2,27 @@ const pm2 = require("pm2");
 
 function listProcesses() {
   return new Promise((resolve, reject) => {
-    pm2.connect((err) => {
-      if (err) return reject(err);
-      pm2.list((err2, procs) => {
+    // guard in case pm2.connect/list hangs: timeout after 1500ms
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
         pm2.disconnect();
+      } catch (e) {}
+      reject(new Error("pm2 connect timeout"));
+    }, 1500);
+
+    pm2.connect((err) => {
+      if (timedOut) return;
+      if (err) {
+        clearTimeout(timer);
+        return reject(err);
+      }
+      pm2.list((err2, procs) => {
+        clearTimeout(timer);
+        try {
+          pm2.disconnect();
+        } catch (e) {}
         if (err2) return reject(err2);
         resolve(procs || []);
       });
