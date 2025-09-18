@@ -1,0 +1,144 @@
+name: Deploy to Droplet (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional tag to deploy (e.g. v1.2.3). If blank the workflow will deploy the latest GitHub Release."
+        required: false
+        default: ""
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag to deploy
+        id: resolve_tag
+        run: |
+          INPUT_TAG="${{ github.event.inputs.tag }}"
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+            echo "Using provided tag: $TAG"
+          else
+            echo "No tag provided, resolving latest GitHub Release..."
+            TAG=$(curl -sS -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name)
+            if [ "$TAG" = "null" ] || [ -z "$TAG" ]; then
+              echo "Failed to resolve latest release tag"
+              exit 1
+            fi
+            echo "Latest release tag: $TAG"
+          fi
+
+          # Validate tag format
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid tag format: $TAG"
+            echo "Use vMAJOR.MINOR.PATCH (e.g. v1.2.3) or pre-release like v1.2.3-rc.1"
+            exit 1
+          fi
+
+          git fetch --tags
+          SHA=$(git rev-list -n 1 "refs/tags/$TAG") || SHA=""
+          echo "Resolved tag $TAG -> $SHA"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+
+      - name: Checkout code (with tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Run frontend unit tests
+        working-directory: frontend
+        run: |
+          npm test
+
+      #- name: Run frontend e2e tests
+      #  working-directory: frontend
+      #  run: |
+      #    npm ci
+      #    npx playwright install --with-deps
+      #    npm run test:e2e
+
+      - name: Run backend smoke test
+        working-directory: backend
+        run: |
+          npm ci
+          npm run smoke
+
+      - name: Copy files to droplet via SSH
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          source: .
+          target: ~/big-brother/releases/${{ steps.resolve_tag.outputs.tag }}
+          rm: true
+
+      - name: Run deploy script on droplet (symlink current -> release)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          script: |
+            set -e
+            TAG=${{ steps.resolve_tag.outputs.tag }}
+            SHA=${{ steps.resolve_tag.outputs.sha }}
+            RELEASE_DIR="$HOME/big-brother/releases/$TAG"
+            CURRENT_DIR="$HOME/big-brother/current"
+
+            # ensure release dir exists (scp creates files there)
+            mkdir -p "$RELEASE_DIR"
+
+            # install backend deps
+            cd "$RELEASE_DIR/backend"
+            npm ci --production
+
+            # write a REVISION file so running deployments can be traced
+            echo "${TAG} ${SHA}" > "$RELEASE_DIR/REVISION"
+
+            # atomic symlink to current
+            ln -sfn "$RELEASE_DIR" "$CURRENT_DIR"
+
+            # restart the backend using pm2 from the current directory
+            cd "$CURRENT_DIR/backend"
+            pm2 restart big-brother-backend || pm2 start npm --name big-brother-backend -- start
+
+            # build frontend and publish to nginx folder
+            cd "$CURRENT_DIR/frontend"
+            npm ci --production
+            npm run build
+
+            sudo mkdir -p /var/www/big-brother
+            sudo rm -rf /var/www/big-brother/* || true
+            sudo cp -r dist/* /var/www/big-brother/
+            sudo chown -R www-data:www-data /var/www/big-brother
+
+            sudo systemctl reload nginx || true
+
+            # health check the backend (fail deployment if unhealthy)
+            echo "Waiting for backend to respond for health-check..."
+            sleep 2
+            if curl -fsS http://127.0.0.1:3002/ >/dev/null; then
+              echo "Health check passed"
+            else
+              echo "Health check failed: backend did not respond on http://127.0.0.1:3002/"
+              exit 1
+            fi
+
+            echo "Deployed $TAG -> $CURRENT_DIR (rev ${SHA})"
